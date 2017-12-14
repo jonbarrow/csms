@@ -123,15 +123,15 @@ With the payload the request must also contain console-specific header informati
 'X-Nintendo-Platform-ID': '1', // unknown origin. Found by sniffing
 'X-Nintendo-Device-Type': '2', // unknown origin. Found by sniffing
 'X-Nintendo-Device-ID': 'REMOVED', // unknown origin. Found by sniffing
-'X-Nintendo-Serial-Number': 'REMOVED',
+'X-Nintendo-Serial-Number': 'REMOVED', // unknown origin. Found by sniffing
 'X-Nintendo-System-Version': '0230', // unknown origin. Found by sniffing
 'X-Nintendo-Region': '4', // console region (4 is EUR)
 'X-Nintendo-Country': 'NL', // console country
 'Accept-Language': 'en', // lang
-'X-Nintendo-Client-ID': 'a2efa818a34fa16b8afbc8a74eba3eda',
-'X-Nintendo-Client-Secret': 'c91cdb5658bd4954ade78533a339cf9a',
-'X-Nintendo-FPD-Version': '0000',
-'X-Nintendo-Environment': 'L1',
+'X-Nintendo-Client-ID': 'a2efa818a34fa16b8afbc8a74eba3eda', // common to all WiiU consoles. We assume these are used to "validate" that it is a WiiU making the request
+'X-Nintendo-Client-Secret': 'c91cdb5658bd4954ade78533a339cf9a', // common to all WiiU consoles. We assume these are used to "validate" that it is a WiiU making the request
+'X-Nintendo-FPD-Version': '0000', // unknown origin. Found by sniffing
+'X-Nintendo-Environment': 'L1', // unknown origin. Found by sniffing
 'X-Nintendo-Title-ID': '0005001010040200', // Title ID of the application/game making the request. `0005001010040200` is the system menu
 'X-Nintendo-Unique-ID': '00402', // unknown origin. Found by sniffing
 'X-Nintendo-Application-Version': '00C4', // unknown origin. Found by sniffing
