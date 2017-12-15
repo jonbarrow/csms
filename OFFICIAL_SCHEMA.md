@@ -11,6 +11,9 @@
     - Logging in
 2. Initial course list
 3. 100man
+4. Course IDs
+5. Course URL
+6. Course Format (packed)
 
 
 # Authentication
@@ -29,7 +32,7 @@ let fs = require('fs'),
     got = require('got'),
     XMLParser = require('pixl-xml'),
     cert = {
-        // WiiU-common certificates. Can be dumped or found online, will not redistribite
+        // WiiU-common certificates. Can be dumped or found online
         key: fs.readFileSync(__dirname + '/ssl/nintendo/wiiu-common.key'),
         cert: fs.readFileSync(__dirname + '/ssl/nintendo/wiiu-common.crt')
     };
@@ -146,11 +149,92 @@ We have no idea where this comes from, still researching. We spent several hours
 # 100man
 When 100man starts, SMM hits `https://wup-ama.app.nintendo.net/api/v1/pickup/DIFFICULTY` where `DIFFICULTY` is `easy`, `normal`, `expert` or `super_expert`. The request only requires one header, `X-Nintendo-ServiceToken` (we have not documented how to get this token yet. We forgot how we originally got it, however the token lasts forever and doesn't seem to invalidate or expire). WUP-AMA will respond with an XML list of 400, 8 digit course IDs. SMM picks one of these at random.
 
-Once SMM picks an ID, it makes an http request to `https://d2sno3mhmk1ekx.cloudfront.net/10.WUP_AMAJ_datastore/ds/1/data/LONG-ID` where `LONG-ID` is the selected ID prefixed with `000` and suffixed with `-00001`. For example, if the course ID was `12345678` then the `LONG-ID` would be `00012345678-00001`, making the URL `https://d2sno3mhmk1ekx.cloudfront.net/10.WUP_AMAJ_datastore/ds/1/data/00012345678-00001`. The request has the parameters `Expires`, `Signature` and `Key-Pair-Id`. `Expires` is a timestamp set in an unknown distance (several weeks from my testing). `Key-Pair-Id` is always `APKAJNJMHZCDH3VQ74HQ`. `Signature` is of unknown origin, and so far cannot be generated. An example `Signature` (taken from a real request) is:
-```
-K1eMCCA8RqJKqrGVXcMpull-tTWt7QTtM7NszXOWWIZyBV84jC9GVobDe9VaZv--9~0sLXjOvKATbQnUuusjhAT2~WsCcNHfhgFtKzcH2x-g1d0tYVqpbG0fSxLJ3s-DTBb1gu7sgfKYJYegdjTOKCBdH8wnJV2AhvEyC29DUAzVH6vZ6dNyETi63a9r4R5hCh~2XrblDOx00vJhhUhwBTVNOnTXrRw9FvGfIB4lj8QZ2Gqb1vDwgkeEO8i4TBu2N0mLV57CdqYNO-~nwkjTaAs9G9MP7BhI4zsAoy8bazccGxT-GCS6gr9IMPf8OoQ5muNknAdRKIT1GTSA44eKKA__
-```
 
-The only patterns I have noticed with `Signature` is the signature seems to always be broken up into 5 parts, separated by tilde, and the final part always ends in `__`
+# Course IDs
 
-The request then downloads the course. The course is in an ASH file which contains 4 other ASH files (2 images and 2 for the course (one sub one overworld))
+Course IDs come in 2 formats:
+- A 19-digit UUID, and
+- An 8 digit decimal ID
+
+When a course is uploaded, SMM will generate a 19-digit UUID split into 4 sections `xxxx-0000-xxxx-xxxx`. The second section seems to always be `0000`. Courses are stored under the 8 digit decimal ID, however. To convert the 19-digit UUID to the 8 digit decimal ID, remove the first two sections of the UUID (`xxxx-0000`), and remove the remaining hyphen. Treat this as HEX, and convert to decimal. For example, UUID `F837-0000-02A1-2A9C` when converted will be `44116636` (`02A12A9C` in HEX)
+
+
+# Course URL
+
+Once SMM picks an ID and converts it to the 8 digit decimal ID (if needed), it makes an http request to `https://d2sno3mhmk1ekx.cloudfront.net/10.WUP_AMAJ_datastore/ds/1/data/LONG-ID` where `LONG-ID` is the selected 8 digit decimal ID prefixed with `000` and suffixed with `-00001`. For example, if the course ID was `44116636` then the `LONG-ID` would be `00044116636-00001`, making the URL `https://d2sno3mhmk1ekx.cloudfront.net/10.WUP_AMAJ_datastore/ds/1/data/00044116636-00001`. The courses are stored on AWS (a?) bucket(s?), and the download URLs are AWS Canned-signed URLs. The `Key-Pair-Id` is `APKAJNJMHZCDH3VQ74HQ`. The private key is still unknown, and will likely never be found out. Because of this we cannot generate signatures, and thus cannot sign the Canned URLs.
+
+
+# Course Format (packed)
+
+The packed course (when first downloaded) is in an ASH file which contains 4 other ASH files (2 images and 2 for the course (one sub one overworld)). The first and fourth ASH are the course images. The first ASH is the preview, while the fourth is the thumbnail. ASH 2 and 3 are the course itself. So far we know nothing about the ASH format these are stored in, and I have been using `ASH.exe` to unpack the ASHs. ASH 1 and 4 (images) are unpacked into ARC files. The image can be extracted after the first 8 bits of each. ASH 2 and 3 are not extracted to ARCs and are instead already usable course cdt files.
+
+**Unpacking Example (NodeJS)**
+```JavaScript
+let fs = require('fs'),
+    readline = require('readline'),
+    child_process = require('child_process');
+
+async function unpackCourse(course) {
+    await splitASH(course);
+    
+    child_process.spawnSync('ASH.exe', ['ASH1']);
+    child_process.spawnSync('ASH.exe', ['ASH2']);
+    child_process.spawnSync('ASH.exe', ['ASH3']);
+    child_process.spawnSync('ASH.exe', ['ASH4']);
+
+    await extractImages();
+    return new Promise((resolve) => {
+        resolve();
+    });
+}
+
+function splitASH(ash) {
+    return new Promise((resolve, reject) => {
+        fs.readFile(ash, (error, data) => {
+            if (error) return reject(error);
+
+            let indexes = getIndexes(data, '\x41\x53\x48\x30'),
+                ash1 = data.subarray(0, indexes[1]),
+                ash2 = data.subarray(indexes[1], indexes[2]),
+                ash3 = data.subarray(indexes[2], indexes[3]),
+                ash4 = data.subarray(indexes[3]);
+
+            fs.writeFileSync(__dirname + '/ASH1', ash1);
+            fs.writeFileSync(__dirname + '/ASH2', ash2);
+            fs.writeFileSync(__dirname + '/ASH3', ash3);
+            fs.writeFileSync(__dirname + '/ASH4', ash4);
+
+            resolve();
+        });
+    });
+}
+
+function extractImages() {
+    var img1 = fs.readFileSync('ASH1.arc'),
+        img2 = fs.readFileSync('ASH4.arc'),
+        img1 = img1.subarray(8),
+        img2 = img2.subarray(8);
+
+    fs.writeFileSync('ASH1.jpeg', img1);
+    fs.writeFileSync('ASH4.jpeg', img2);
+    return new Promise((resolve) => {
+        resolve();
+    });
+    
+}
+
+function getIndexes(array, string) {
+    let indexes = [], i;
+    while ((i = array.indexOf(string, i+1)) != -1){
+        indexes.push(i);
+    }
+    return indexes;
+}
+
+
+// 'course.ash' is assumed to be a valid course downloaded from the SMM AWS servers
+unpackCourse('course.ash').then(() => {
+    console.log('done');
+});
+
+```
