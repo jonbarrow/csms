@@ -1,6 +1,6 @@
 # [GET] https://account.nintendo.net/v1/api/admin/mapped_ids
 
-## *Requires client certificate to access
+### *Requires client certificate to access
 
 ## Description
 Takes a list input and maps out the requested output
