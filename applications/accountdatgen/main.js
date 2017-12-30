@@ -1,7 +1,8 @@
-const prompt = require('prompt'),
+let inquirer = require('inquirer'),
     fs = require('fs'),
     got = require('got'),
     XMLParser = require('pixl-xml'),
+    country_codes = require('./country_codes.js'),
     cert = {
         // WiiU-common certificates. Can be dumped or found online
         key: fs.readFileSync(__dirname + '/certs/wiiu-common.key'),
@@ -30,7 +31,8 @@ function bufferToHex(buff) {
     return result;
 }
 
-function getPID(username,callback) {
+function getPID(username, cb) {
+
     let headers = {
         'X-Nintendo-Platform-ID': '1',
         'X-Nintendo-Device-Type': '2',
@@ -49,29 +51,32 @@ function getPID(username,callback) {
         headers: headers
     };
 
-    apiRequest('https://account.nintendo.net/v1/api/admin/mapped_ids?input_type=user_id&output_type=pid&input=' + username, options, (body,callb) => {
+    apiRequest('https://account.nintendo.net/v1/api/admin/mapped_ids?input_type=user_id&output_type=pid&input=' + username, options, (body) => {
         let xml;
         try {
             xml = XMLParser.parse(body);
         } catch (error) {
+            console.log('oops 1')
             throw new Error(error);
         }
-        callb(xml.mapped_id.out_id);
-    },callback);
+        cb(xml.mapped_id.out_id);
+    });
 }
 
-async function apiRequest(uri, options, cb, cb2) {
+async function apiRequest(uri, options, cb) {
+    let response;
     try {
-        let response = await got(uri, options);
-        cb(response.body,cb2);
+        response = await got(uri, options);
     } catch (error) {
         throw new Error(error.response.body);
     }
+    
+    cb(response.body);
 }
 
 function parseToFile(obj) {
     const fs = require('fs');
-    var path = __dirname + "/account";
+    var path = __dirname + "\\account";
     if (fs.existsSync(path + '.dat')) {
         let i = 1;
         while (fs.existsSync(path + i + '.dat')) {
@@ -95,29 +100,36 @@ function parseToFile(obj) {
 }
 
 // get the input
-
-prompt.start();
-
-console.log('Please fill in the username, password and the countryCode of the NNID that is linked with your console where you got the otp from. \n For country codes go here: http://wiibrew.org/wiki/Country_Codes');
-
-prompt.get(['username', 'password','countryCode'], function (err, result) {
-
-    //parse data into a file
-
-    var user = result.username.trim(),
-        pass = result.password.trim(),
-        cc = parseInt(result.countryCode.trim()).toString(16);
-
-    getPID(user,function(pid) {
-        const hash = hashPassword(pass,pid);
-        var output = {
-            Country: cc,
-            AccountPasswordCache: hash,
-            IsPasswordCacheEnabled: '1',
-            AccountId: user,
-            PersistentId: '80000001'
-        };
+(async () => {
+    let answers = await inquirer.prompt([
+        {
+            type: 'input',
+            name: 'username',
+            message: 'Enter username'
+        },
+        {
+            type: 'password',
+            name: 'password',
+            message: 'Enter password'
+        },
+        {
+            type: 'list',
+            name: 'country',
+            message: 'Pick your console country',
+            choices: country_codes
+        }
+    ]);
+    
+    getPID(answers.username, (pid) => {
+        let hash = hashPassword(answers.password, pid),
+            output = {
+                Country: answers.country.toString(16),
+                AccountPasswordCache: hash,
+                IsPasswordCacheEnabled: '1',
+                AccountId: answers.username,
+                PersistentId: '80000001'
+            };
+                 
         parseToFile(output);
     });
-
-});
+})();
