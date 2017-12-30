@@ -18,9 +18,12 @@
   "homepage": "https://github.com/RedDuckss/csms#readme",
   "dependencies": {
     "aws-cloudfront-sign": "^2.2.0",
+    "cheerio": "^1.0.0-rc.2",
     "colors": "^1.1.2",
     "express": "^4.16.2",
+    "got": "^8.0.1",
     "json2xml": "^0.1.3",
+    "request": "^2.83.0",
     "smm-api": "^2.1.2"
   }
 }
